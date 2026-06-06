@@ -1,0 +1,5 @@
+Import("env")
+
+env_srt = env.Clone()
+sources = Glob("*.cpp")
+env.add_source_files(env.modules_sources, sources)
