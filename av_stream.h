@@ -73,7 +73,6 @@ private:
     int video_stream_idx = -1;
     int audio_stream_idx = -1;
 
-    static void *_handle_winpthread;
     Thread recv_thread;
     Mutex mutex;
     volatile bool running = false;

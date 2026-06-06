@@ -13,7 +13,6 @@ void   *FFAVStream::_handle_avutil     = nullptr;
 void   *FFAVStream::_handle_avcodec    = nullptr;
 void   *FFAVStream::_handle_avformat   = nullptr;
 void   *FFAVStream::_handle_swresample = nullptr;
-void   *FFAVStream::_handle_winpthread = nullptr;
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -65,13 +64,6 @@ bool FFAVStream::load_libraries() {
     if (!dir.ends_with("/") && !dir.ends_with("\\")) {
         dir += "/";
     }
-
-#if defined(WINDOWS_ENABLED)
-    // Load winpthread first so Windows can resolve it when avutil loads
-    print_line(String("FFAVStream: loading winpthread from: ") + dir);
-    OS::get_singleton()->open_dynamic_library(dir + "libwinpthread-1.dll", _handle_winpthread);
-    // Don't fail if it's not there — it may already be in PATH
-#endif
 
     print_line(String("FFAVStream: loading FFmpeg from: ") + dir);
 
@@ -140,9 +132,6 @@ void FFAVStream::unload_libraries() {
     if (_handle_avcodec)    { OS::get_singleton()->close_dynamic_library(_handle_avcodec);    _handle_avcodec    = nullptr; }
     if (_handle_swresample) { OS::get_singleton()->close_dynamic_library(_handle_swresample); _handle_swresample = nullptr; }
     if (_handle_avutil)     { OS::get_singleton()->close_dynamic_library(_handle_avutil);     _handle_avutil     = nullptr; }
-#if defined(WINDOWS_ENABLED)
-    if (_handle_winpthread) { OS::get_singleton()->close_dynamic_library(_handle_winpthread); _handle_winpthread = nullptr; }
-#endif
 }
 
 bool FFAVStream::libraries_loaded() {
@@ -198,6 +187,7 @@ void FFAVStream::_emit_stream_closed() {
 }
 
 void FFAVStream::play(const String &p_url) {
+    state = STATE_STOPPED;
     if (!g_ff.is_loaded()) {
         if (!load_libraries()) {
             state = STATE_MISSING_LIBS;
@@ -212,7 +202,6 @@ void FFAVStream::play(const String &p_url) {
 }
 
 void FFAVStream::stop() {
-    if (!running) return;
     running = false;
     if (recv_thread.is_started()) recv_thread.wait_to_finish();
     if (fmt_ctx && g_ff.avformat_close_input) {

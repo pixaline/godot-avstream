@@ -76,6 +76,7 @@ case "$TARGETARCH" in
 		--arch=x86
 		--disable-asm
 		--extra-ldflags=-static-libgcc
+		--extra-ldflags=-static
 		--extra-libs=-lpthread"
 		;;
 	windows_64)
@@ -88,6 +89,7 @@ case "$TARGETARCH" in
 		--arch=x86_64
 		--disable-asm
 		--extra-ldflags=-static-libgcc
+		--extra-ldflags=-static
 		--extra-libs=-lpthread"
 		;;
 	osx_32)
@@ -152,11 +154,12 @@ mkdir -p "$CODEC_PREFIX"
 echo ""
 echo "==> Building libvpx $VPX_VERSION"
 VPX_SRC="$SOURCES/libvpx"
-clone_or_update "https://chromium.googlesource.com/webm/libvpx" "$VPX_SRC" "$VPX_VERSION"
 
 if [ -f "$CODEC_PREFIX/lib/libvpx.a" ]; then
     echo "==> libvpx already built, skipping"
 else
+	clone_or_update "https://chromium.googlesource.com/webm/libvpx" "$VPX_SRC" "$VPX_VERSION"
+
 	cd "$VPX_SRC"
 	make distclean 2>/dev/null || true
 
@@ -188,11 +191,12 @@ echo "==> libvpx done"
 echo ""
 echo "==> Building libopus $OPUS_VERSION"
 OPUS_SRC="$SOURCES/opus"
-clone_or_update "https://gitlab.xiph.org/xiph/opus.git" "$OPUS_SRC" "$OPUS_VERSION"
 
 if [ -f "$CODEC_PREFIX/lib/libopus.a" ]; then
     echo "==> libopus already built, skipping"
 else
+	clone_or_update "https://gitlab.xiph.org/xiph/opus.git" "$OPUS_SRC" "$OPUS_VERSION"
+
 	cd "$OPUS_SRC"
 	# opus needs autogen if configure doesn't exist
 	[ -f configure ] || ./autogen.sh
@@ -200,7 +204,7 @@ else
 	make distclean 2>/dev/null || true
 
 	./configure \
-		--host="$OPUS_HOST" \/
+		--host="$OPUS_HOST" \
 		--prefix="$CODEC_PREFIX" \
 		--disable-shared \
 		--enable-static \
@@ -225,11 +229,12 @@ echo "==> libopus done"
 echo ""
 echo "==> Building FFmpeg $FFMPEG_VERSION"
 FFMPEG_SRC="$SOURCES/ffmpeg"
-clone_or_update "https://git.ffmpeg.org/ffmpeg.git" "$FFMPEG_SRC" "$FFMPEG_VERSION"
 
 if [ -f "$OUTDIR/lib/libavformat.so" ] || [ -f "$OUTDIR/lib/libavformat.dylib" ] || [ -f "$OUTDIR/bin/avformat-58.dll" ]; then
-    echo "==> FFmpeg already built, skipping"
+    echo "==> FFmpeg already built in $OUTDIR, skipping"
 else
+	clone_or_update "https://git.ffmpeg.org/ffmpeg.git" "$FFMPEG_SRC" "$FFMPEG_VERSION"
+
 	cd "$FFMPEG_SRC"
 	make distclean 2>/dev/null || true
 
