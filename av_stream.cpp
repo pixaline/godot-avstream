@@ -13,6 +13,7 @@ void   *FFAVStream::_handle_avutil     = nullptr;
 void   *FFAVStream::_handle_avcodec    = nullptr;
 void   *FFAVStream::_handle_avformat   = nullptr;
 void   *FFAVStream::_handle_swresample = nullptr;
+int64_t FFAVStream::stall_timeout_ms   = 5000;
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -115,6 +116,7 @@ bool FFAVStream::load_libraries() {
     ok &= _load_symbol(_handle_avutil,   "av_dict_set",               (void*&)g_ff.av_dict_set);
     ok &= _load_symbol(_handle_avutil,   "av_dict_free",              (void*&)g_ff.av_dict_free);
     ok &= _load_symbol(_handle_avutil,   "av_strerror",               (void*&)g_ff.av_strerror);
+    ok &= _load_symbol(_handle_avformat, "avformat_alloc_context",    (void*&)g_ff.avformat_alloc_context);
 
     if (!ok) {
         g_ff = FFmpegFunctions();
@@ -158,6 +160,10 @@ void FFAVStream::_bind_methods() {
     ClassDB::bind_method(D_METHOD("libraries_loaded"),          &FFAVStream::libraries_loaded_inst);
     ClassDB::bind_method(D_METHOD("set_library_path", "path"),  &FFAVStream::set_library_path_inst);
     ClassDB::bind_method(D_METHOD("get_library_path"),          &FFAVStream::get_library_path_inst);
+
+    ClassDB::bind_method(D_METHOD("set_stall_timeout", "ms"), &FFAVStream::set_stall_timeout_inst);
+    ClassDB::bind_method(D_METHOD("get_stall_timeout"),       &FFAVStream::get_stall_timeout_inst);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "stall_timeout"), "set_stall_timeout", "get_stall_timeout");
 
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "library_path"),
                  "set_library_path", "get_library_path");
@@ -203,6 +209,7 @@ void FFAVStream::play(const String &p_url) {
 
 void FFAVStream::stop() {
     running = false;
+    _last_packet_time = 0;
     if (recv_thread.is_started()) recv_thread.wait_to_finish();
     if (fmt_ctx && g_ff.avformat_close_input) {
         g_ff.avformat_close_input(&fmt_ctx);
@@ -233,7 +240,13 @@ void FFAVStream::_recv_loop() {
     g_ff.av_dict_set(&opts, "probesize",       "1000000",   0);
     g_ff.av_dict_set(&opts, "stimeout",        "2000000", 0);
 
+    _last_packet_time = 0;
+
     AVPacket *pkt = nullptr;
+
+    fmt_ctx = g_ff.avformat_alloc_context();
+    fmt_ctx->interrupt_callback.callback = _interrupt_callback;
+    fmt_ctx->interrupt_callback.opaque = this;
 
     int ret = g_ff.avformat_open_input(&fmt_ctx, url.utf8().get_data(), nullptr, &opts);
     g_ff.av_dict_free(&opts);
@@ -269,16 +282,18 @@ void FFAVStream::_recv_loop() {
     state = STATE_PLAYING;
     call_deferred("_emit_stream_opened");
 
+    _last_packet_time = OS::get_singleton()->get_ticks_msec();
     pkt = g_ff.av_packet_alloc();
     while (running) {
         ret = g_ff.av_read_frame(fmt_ctx, pkt);
         if (ret == AVERROR_EOF || ret == AVERROR(EAGAIN)) {
             OS::get_singleton()->delay_usec(1000);
-            continue;
+	    continue;
         }
         if (ret < 0) { print_error("FFAVStream: read error"); state = STATE_ERROR; break; }
         if (pkt->stream_index == video_stream_idx)       _push_video_packet(pkt);
         else if (pkt->stream_index == audio_stream_idx)  _push_audio_packet(pkt);
+	_last_packet_time = OS::get_singleton()->get_ticks_msec();
         g_ff.av_packet_unref(pkt);
     }
     g_ff.av_packet_free(&pkt);
@@ -286,6 +301,21 @@ void FFAVStream::_recv_loop() {
 done:
     // Always fires regardless of how we exited — connection failure, read error, or clean stop
     call_deferred("_emit_stream_closed");
+}
+
+// ---------------------------------------------------------------------------
+// Interrupt callback
+// ---------------------------------------------------------------------------
+int FFAVStream::_interrupt_callback(void *ctx) {
+    FFAVStream *self = reinterpret_cast<FFAVStream *>(ctx);
+    if (!self->running) return 1;
+    if (self->_last_packet_time == 0) return 0;
+    int64_t now = OS::get_singleton()->get_ticks_msec();
+    if ((now - self->_last_packet_time) > stall_timeout_ms) {
+        print_line("FFAVStream: stall timeout, aborting");
+        return 1;
+    }
+    return 0;
 }
 
 // ---------------------------------------------------------------------------

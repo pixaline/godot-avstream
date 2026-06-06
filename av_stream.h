@@ -29,6 +29,7 @@ struct FFmpegFunctions {
     int         (*av_dict_set)(AVDictionary**, const char*, const char*, int) = nullptr;
     void        (*av_dict_free)(AVDictionary**) = nullptr;
     int         (*av_strerror)(int, char*, size_t) = nullptr;
+    AVFormatContext* (*avformat_alloc_context)() = nullptr;
 
     bool is_loaded() const { return avformat_open_input != nullptr; }
 };
@@ -91,6 +92,10 @@ private:
     int audio_queue_write = 0;
     int audio_queue_read  = 0;
 
+    static int _interrupt_callback(void *ctx);
+    int64_t _last_packet_time = 0;
+    static int64_t stall_timeout_ms;
+
     State state = STATE_STOPPED;
     String url;
 
@@ -116,6 +121,11 @@ public:
     bool   load_libraries_inst()                       { return load_libraries(); }
     void   unload_libraries_inst()                     { unload_libraries(); }
     bool   libraries_loaded_inst() const               { return libraries_loaded(); }
+
+    static void   set_stall_timeout(int p_ms) { stall_timeout_ms = p_ms; }
+    static int    get_stall_timeout()          { return (int)stall_timeout_ms; }
+    void          set_stall_timeout_inst(int p_ms) { set_stall_timeout(p_ms); }
+    int           get_stall_timeout_inst()         { return get_stall_timeout(); }
 
     bool pop_video_packet(uint8_t **out_data, int *out_size, int64_t *out_pts);
     bool pop_audio_packet(uint8_t **out_data, int *out_size, int64_t *out_pts);
