@@ -231,7 +231,6 @@ void FFAVStream::_recv_loop() {
     g_ff.av_dict_set(&opts, "flags",           "low_delay", 0);
     g_ff.av_dict_set(&opts, "analyzeduration", "1000000",   0);
     g_ff.av_dict_set(&opts, "probesize",       "1000000",   0);
-    g_ff.av_dict_set(&opts, "timeout",         "2000000", 0);
     g_ff.av_dict_set(&opts, "stimeout",        "2000000", 0);
 
     AVPacket *pkt = nullptr;
