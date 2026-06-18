@@ -14,6 +14,7 @@ void FFAVStreamDecoder::_bind_methods() {
     ClassDB::bind_method(D_METHOD("stop"),                 &FFAVStreamDecoder::stop);
     ClassDB::bind_method(D_METHOD("get_state"),            &FFAVStreamDecoder::get_state);
     ClassDB::bind_method(D_METHOD("get_texture"),          &FFAVStreamDecoder::get_texture);
+    ClassDB::bind_method(D_METHOD("set_video_codec_id", "id"), &FFAVStreamDecoder::set_video_codec_id);
 
     ADD_SIGNAL(MethodInfo("audio_frame",
         PropertyInfo(Variant::POOL_VECTOR2_ARRAY, "frames")));
@@ -48,6 +49,8 @@ void FFAVStreamDecoder::start() {
         return;
     }
 
+    _video_codec_id = _stream->get_video_codec_id();
+
     if (!_init_vpx() || !_init_opus()) {
         _state = STATE_ERROR;
         return;
@@ -80,7 +83,12 @@ void FFAVStreamDecoder::stop() {
 // Codec initialisation
 // ---------------------------------------------------------------------------
 bool FFAVStreamDecoder::_init_vpx() {
-    vpx_codec_iface_t *iface = vpx_codec_vp8_dx();
+    if (_vpx_initialized) {
+        vpx_codec_destroy(&_vpx_ctx);
+        _vpx_initialized = false;
+    }
+    vpx_codec_iface_t *iface = (_video_codec_id == AV_CODEC_ID_VP9) ?
+        vpx_codec_vp9_dx() : vpx_codec_vp8_dx();
     vpx_codec_dec_cfg_t cfg = {};
     cfg.threads = 2;
 
@@ -88,15 +96,18 @@ bool FFAVStreamDecoder::_init_vpx() {
         &_vpx_ctx, iface, &cfg, 0, VPX_DECODER_ABI_VERSION);
 
     if (err != VPX_CODEC_OK) {
-        print_error("FFAVStreamDecoder: failed to init VP8 decoder");
+        print_error("FFAVStreamDecoder: failed to init VPx decoder");
         return false;
     }
-
     _vpx_initialized = true;
     return true;
 }
 
 bool FFAVStreamDecoder::_init_opus() {
+    if (_opus_ctx) {
+        opus_decoder_destroy(_opus_ctx);
+        _opus_ctx = nullptr;
+    }
     int err = 0;
     _opus_ctx = opus_decoder_create(OPUS_SAMPLE_RATE, OPUS_CHANNELS, &err);
     if (err != OPUS_OK || !_opus_ctx) {

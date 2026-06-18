@@ -49,6 +49,8 @@ private:
     int _video_width  = 0;
     int _video_height = 0;
 
+    int _video_codec_id = 0;
+
     State _state = STATE_STOPPED;
 
     bool _init_vpx();
@@ -68,6 +70,7 @@ public:
 
     State        get_state()   const { return _state; }
     Ref<Texture> get_texture() const { return _texture; }
+    void set_video_codec_id(int id) { _video_codec_id = id; }
 
     FFAVStreamDecoder();
     ~FFAVStreamDecoder();

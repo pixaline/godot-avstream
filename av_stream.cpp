@@ -165,6 +165,9 @@ void FFAVStream::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_stall_timeout"),       &FFAVStream::get_stall_timeout_inst);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "stall_timeout"), "set_stall_timeout", "get_stall_timeout");
 
+    ClassDB::bind_method(D_METHOD("get_video_codec_id"), &FFAVStream::get_video_codec_id);
+    ClassDB::bind_method(D_METHOD("get_audio_codec_id"), &FFAVStream::get_audio_codec_id);
+
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "library_path"),
                  "set_library_path", "get_library_path");
 
@@ -222,6 +225,8 @@ void FFAVStream::stop() {
     video_queue_read = video_queue_write = 0;
     audio_queue_read = audio_queue_write = 0;
     video_stream_idx = audio_stream_idx = -1;
+    video_codec_id = 0;
+    audio_codec_id = 0;
     state = STATE_STOPPED;
 }
 
@@ -267,9 +272,17 @@ void FFAVStream::_recv_loop() {
 
     for (unsigned int i = 0; i < fmt_ctx->nb_streams; i++) {
         AVMediaType type = fmt_ctx->streams[i]->codecpar->codec_type;
-        if (type == AVMEDIA_TYPE_VIDEO && video_stream_idx == -1) video_stream_idx = i;
-        else if (type == AVMEDIA_TYPE_AUDIO && audio_stream_idx == -1) audio_stream_idx = i;
+
+        if (type == AVMEDIA_TYPE_VIDEO && video_stream_idx == -1) {
+	    video_stream_idx = i;
+	    video_codec_id = fmt_ctx->streams[i]->codecpar->codec_id;
+	}
+        else if (type == AVMEDIA_TYPE_AUDIO && audio_stream_idx == -1) {
+	    audio_stream_idx = i;
+	    audio_codec_id = fmt_ctx->streams[i]->codecpar->codec_id;
+	}
     }
+    print_line(String("FFAVStream: video_codec_id=") + itos(video_codec_id) + " audio_codec_id=" + itos(audio_codec_id));
 
     if (video_stream_idx == -1) {
         print_error("FFAVStream: no video stream found");

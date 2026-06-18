@@ -73,6 +73,8 @@ private:
     AVFormatContext *fmt_ctx = nullptr;
     int video_stream_idx = -1;
     int audio_stream_idx = -1;
+    int video_codec_id = 0;
+    int audio_codec_id = 0;
 
     Thread recv_thread;
     Mutex mutex;
@@ -126,6 +128,9 @@ public:
     static int    get_stall_timeout()          { return (int)stall_timeout_ms; }
     void          set_stall_timeout_inst(int p_ms) { set_stall_timeout(p_ms); }
     int           get_stall_timeout_inst()         { return get_stall_timeout(); }
+
+    int get_video_codec_id() const { return video_codec_id; }
+    int get_audio_codec_id() const { return audio_codec_id; }
 
     bool pop_video_packet(uint8_t **out_data, int *out_size, int64_t *out_pts);
     bool pop_audio_packet(uint8_t **out_data, int *out_size, int64_t *out_pts);
