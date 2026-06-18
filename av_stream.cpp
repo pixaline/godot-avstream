@@ -73,7 +73,7 @@ bool FFAVStream::load_libraries() {
     const String swresample_name = "swresample-3.dll";
     const String avcodec_name    = "avcodec-58.dll";
     const String avformat_name   = "avformat-58.dll";
-#elif defined(MACOS_ENABLED)
+#elif defined(OSX_ENABLED)
     const String avutil_name     = "libavutil.56.dylib";
     const String swresample_name = "libswresample.3.dylib";
     const String avcodec_name    = "libavcodec.58.dylib";
