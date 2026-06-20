@@ -135,9 +135,48 @@ case "$TARGETARCH" in
 		EXTRA_CONFIGURE="
 		--arch=x86_64"
 		;;
+	android_arm64v8)
+		export NDK="/usr/lib/android-sdk/ndk/28.1.13356709"
+		export TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+		export CROSS_PREFIX="$TOOLCHAIN/bin/aarch64-linux-android"
+		export SYSROOT="$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+		VPX_TARGET="arm64-android-gcc"
+		OPUS_HOST="aarch64-linux-android"
+		EXTRA_CONFIGURE+=(--cross-prefix="$CROSS_PREFIX"-)
+		EXTRA_CONFIGURE+=(--target-os=android)
+		EXTRA_CONFIGURE+=(--arch=aarch64)
+		EXTRA_CONFIGURE+=(--cc="$CROSS_PREFIX"21-clang)
+		EXTRA_CONFIGURE+=(--cxx="$CROSS_PREFIX"21-clang++)
+		EXTRA_CONFIGURE+=(--sysroot="$SYSROOT")
+		EXTRA_CONFIGURE+=(--enable-cross-compile)
+		EXTRA_CONFIGURE+=(--disable-asm)
+		EXTRA_CONFIGURE+=(--extra-cflags="-fPIC")
+		EXTRA_CONFIGURE+=(--extra-ldflags="-fPIC")
+		EXTRA_CONFIGURE+=(--extra-cflags="-fPIC -fpic -isystem $SYSROOT/usr/include -isystem $SYSROOT/usr/include/aarch64-linux-android")
+		;;
+	android_armv7)
+		export NDK="/usr/lib/android-sdk/ndk/28.1.13356709"
+		export TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+		export CROSS_PREFIX="$TOOLCHAIN/bin/armv7a-linux-androideabi"
+		export SYSROOT="$NDK/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+		VPX_TARGET="armv7-android-gcc"
+		OPUS_HOST="armv7a-linux-androideabi"
+		EXTRA_CONFIGURE+=(--cross-prefix="$TOOLCHAIN/bin/arm-linux-androideabi"-)
+		EXTRA_CONFIGURE+=(--target-os=android)
+		EXTRA_CONFIGURE+=(--arch=arm)
+		EXTRA_CONFIGURE+=(--cpu=armv7-a)
+		EXTRA_CONFIGURE+=(--cc="$CROSS_PREFIX"21-clang)
+		EXTRA_CONFIGURE+=(--cxx="$CROSS_PREFIX"21-clang++)
+		EXTRA_CONFIGURE+=(--sysroot="$SYSROOT")
+		EXTRA_CONFIGURE+=(--enable-cross-compile)
+		EXTRA_CONFIGURE+=(--disable-asm)
+		EXTRA_CONFIGURE+=(--extra-cflags="-fPIC -mfpu=vfpv3-d16 -mfloat-abi=softfp")
+		EXTRA_CONFIGURE+=(--extra-ldflags="-fPIC")
+		EXTRA_CONFIGURE+=(--extra-cflags="-fPIC -fpic -D__ANDROID_MIN_SDK_VERSION__=21 -isystem $SYSROOT/usr/include -isystem $SYSROOT/usr/include/arm-linux-androideabi")
+		;;
 	*)
 		echo "Unknown target: $TARGETARCH"
-		echo "Usage: $0 [x11_32|x11_64|windows_32|windows_64|osx_32|osx_64]"
+		echo "Usage: $0 [x11_32|x11_64|windows_32|windows_64|osx_32|osx_64|android_arm64v8|android_armv7]"
 		exit 1
 		;;
 esac
@@ -163,11 +202,32 @@ else
 	cd "$VPX_SRC"
 	make distclean 2>/dev/null || true
 
-	CC=${CROSS_PREFIX}gcc \
-		CXX=${CROSS_PREFIX}g++ \
-		AR=${CROSS_PREFIX}ar \
-		CROSS="$CROSS_PREFIX" \
-		./configure \
+	EXTRACONFIG=
+	if [[ "$TARGETARCH" == android* ]]; then
+		if [[ "$TARGETARCH" == "android_armv7" ]]; then
+			export CFLAGS="-I$SYSROOT/usr/include -I$SYSROOT/usr/include/arm-linux-androideabi -O2 -fPIC"
+			EXTRACONFIG="--disable-neon \
+				--disable-neon-dotprod \
+				--disable-neon-i8mm \
+				--disable-runtime-cpu-detect"
+		elif [[ "$TARGETARCH" == "android_arm64v8" ]]; then
+			export CFLAGS="-I$SYSROOT/usr/include -I$SYSROOT/usr/include/aarch64-linux-android -O2 -fPIC"
+		fi
+		export CC="${CROSS_PREFIX}21-clang"
+		export CXX="${CROSS_PREFIX}21-clang++"
+		export AR="$TOOLCHAIN/bin/llvm-ar"
+		export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+		export LD="$TOOLCHAIN/bin/ld"
+	else
+
+		export CC=${CROSS_PREFIX}gcc
+		export CXX=${CROSS_PREFIX}g++
+		export AR=${CROSS_PREFIX}ar
+		export CROSS="$CROSS_PREFIX"
+	fi
+
+	echo $CC
+	./configure \
 		--target="$VPX_TARGET" \
 		--prefix="$CODEC_PREFIX" \
 		--disable-shared \
@@ -176,7 +236,8 @@ else
 		--disable-tools \
 		--disable-docs \
 		--disable-unit-tests \
-		--disable-runtime-cpu-detect
+		--disable-runtime-cpu-detect \
+		$EXTRACONFIG
 
 	make -j"$JOBS"
 	make install
@@ -203,6 +264,27 @@ else
 
 	make distclean 2>/dev/null || true
 
+	EXTRACONFIG=
+	if [[ "$TARGETARCH" == android* ]]; then
+		if [[ "$TARGETARCH" == "android_armv7" ]]; then
+			export CFLAGS="-I$SYSROOT/usr/include -I$SYSROOT/usr/include/arm-linux-androideabi -O2 -fPIC"
+		elif [[ "$TARGETARCH" == "android_arm64v8" ]]; then
+			export CFLAGS="-I$SYSROOT/usr/include -I$SYSROOT/usr/include/aarch64-linux-android -O2 -fPIC"
+		fi
+		export CC="${CROSS_PREFIX}21-clang"
+		export CXX="${CROSS_PREFIX}21-clang++"
+		export AR="$TOOLCHAIN/bin/llvm-ar"
+		export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
+		export NM="$TOOLCHAIN/bin/nm"
+		EXTRACONFIG="--disable-asm"
+	else
+
+		export CC=${CROSS_PREFIX}gcc
+		export CXX=${CROSS_PREFIX}g++
+		export AR=${CROSS_PREFIX}ar
+		export RANLIB=${CROSS_PREFIX}ranlib \
+		export NM=${CROSS_PREFIX}nm
+	fi
 	./configure \
 		--host="$OPUS_HOST" \
 		--prefix="$CODEC_PREFIX" \
@@ -210,11 +292,7 @@ else
 		--enable-static \
 		--disable-extra-programs \
 		--disable-doc \
-		CC=${CROSS_PREFIX}gcc \
-		CXX=${CROSS_PREFIX}g++ \
-		AR=${CROSS_PREFIX}ar \
-		RANLIB=${CROSS_PREFIX}ranlib \
-		NM=${CROSS_PREFIX}nm
+		$EXTRACONFIG
 
 	make -j"$JOBS"
 	make install
